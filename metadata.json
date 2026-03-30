@@ -1,0 +1,5 @@
+{
+  "name": "记得 (Remember)",
+  "description": "一个简约、可靠的健康提醒助手，支持定时提醒、弹窗确认和用药/健康记录。",
+  "requestFramePermissions": ["microphone"]
+}
