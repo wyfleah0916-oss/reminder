@@ -114,6 +114,21 @@ const DEFAULT_MEAL_SETTINGS: MealSettings = {
   dinner: '18:30'
 };
 
+const COMMON_MEDS = [
+  {
+    category: "高血压 (降压药)",
+    items: ["托平胶囊", "厄贝沙坦片", "诺欣妥片", "雅施达片 (培哚普利)", "施慧达片", "安博诺片", "盐酸哌唑嗪片", "伲福达片", "复代文片", "拜新同片", "搏立高片", "亚尼安片", "苯磺酸左氨氯地平片", "合贝爽缓释胶囊 (盐酸地尔硫卓缓释胶囊)", "维拉帕米", "(美托洛尔) 倍他乐克缓释片", "倍他乐克片"]
+  },
+  {
+    category: "高血糖 (降糖药)",
+    items: ["达格列净片", "贝希胶囊", "二甲双胍片", "阿卡波糖片"]
+  },
+  {
+    category: "高血脂 (调脂/降脂药)",
+    items: ["美达信片", "普伐他汀片", "依折麦布片", "海舒严片", "瑞百安针", "立普 (阿托伐他汀)"]
+  }
+];
+
 export default function App() {
   // --- State ---
   const [tasks, setTasks] = useState<Task[]>(() => {
@@ -135,6 +150,8 @@ export default function App() {
   const [isAdding, setIsAdding] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [entryMode, setEntryMode] = useState<'SELECT' | 'MANUAL'>('SELECT');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   
   // Form State
   const [taskForm, setTaskForm] = useState<Partial<Task>>({
@@ -227,7 +244,8 @@ export default function App() {
             setActiveReminderSlot(index);
             
             // Voice broadcast
-            const msg = `${task.type === 'MED' ? '药品' : task.type === 'SUPP' ? '补品' : '健康'}提醒：该服用${task.name}了，剂量是${task.dosage}。`;
+            const categoryName = task.type === 'MED' ? '药品' : task.type === 'SUPP' ? '补品' : task.type === 'WATER' ? '喝水' : '运动/学习';
+            const msg = `${categoryName}提醒：该服用${task.name}了，剂量是${task.dosage}。`;
             speak(msg, task);
 
             // Update last reminder date for this specific reminder slot
@@ -299,7 +317,7 @@ export default function App() {
   // --- Actions ---
   const saveTask = () => {
     const isLightweight = taskForm.type === 'WATER' || taskForm.type === 'EXERCISE';
-    const defaultName = taskForm.type === 'WATER' ? '喝水' : '运动';
+    const defaultName = taskForm.type === 'WATER' ? '喝水' : '运动/学习';
     
     if (!isLightweight && (!taskForm.name || !taskForm.dosage)) return;
     if (isLightweight && (!taskForm.reminders || taskForm.reminders.length === 0)) return;
@@ -338,6 +356,7 @@ export default function App() {
         reminders: finalReminders,
         isActive: true,
         voiceType: taskForm.voiceType || 'SYSTEM',
+        customVoice: taskForm.customVoice,
         photo: taskForm.photo,
         notes: taskForm.notes,
         isInterval: taskForm.isInterval,
@@ -350,6 +369,7 @@ export default function App() {
     
     setIsAdding(false);
     setEditingTask(null);
+    setSelectedCategory(null);
     setTaskForm({ 
       type: 'MED', 
       name: '', 
@@ -575,7 +595,7 @@ export default function App() {
     }
   };
 
-  const itemLabel = taskForm.type === 'MED' ? '药品' : taskForm.type === 'SUPP' ? '补品' : '项目';
+  const itemLabel = taskForm.type === 'MED' ? '药品' : taskForm.type === 'SUPP' ? '补品' : taskForm.type === 'EXERCISE' ? '运动/学习' : '项目';
 
   return (
     <div className="min-h-screen bg-app-bg text-app-text font-sans pb-24 selection:bg-primary selection:text-white overflow-x-hidden">
@@ -599,6 +619,7 @@ export default function App() {
             <button 
               onClick={() => { 
                 setEditingTask(null); 
+                setSelectedCategory(null);
                 setTaskForm({ 
                   type: 'MED', 
                   name: '', 
@@ -684,6 +705,7 @@ export default function App() {
                     <button 
                       onClick={() => { 
                         setEditingTask(null); 
+                        setSelectedCategory(null);
                         setTaskForm({ 
                           type: 'MED', 
                           name: '', 
@@ -756,7 +778,12 @@ export default function App() {
                 </div>
                 <div className="flex gap-2">
                   <button 
-                    onClick={() => { setEditingTask(task); setTaskForm(task); setIsAdding(true); }}
+                    onClick={() => { 
+                      setEditingTask(task); 
+                      setTaskForm(task); 
+                      setSelectedCategory(null);
+                      setIsAdding(true); 
+                    }}
                     className="p-2 text-gray-200 hover:text-primary transition-colors"
                   >
                     <Edit3 size={18} />
@@ -970,20 +997,102 @@ export default function App() {
                   {(['MED', 'SUPP', 'WATER', 'EXERCISE'] as TaskType[]).map(t => (
                     <button 
                       key={t}
-                      onClick={() => setTaskForm({...taskForm, type: t})}
+                      onClick={() => {
+                        setTaskForm({...taskForm, type: t});
+                        if (t !== 'MED') setEntryMode('MANUAL');
+                      }}
                       className={cn(
                         "flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
                         taskForm.type === t ? "bg-primary text-white shadow-lg" : "bg-gray-50 text-gray-400"
                       )}
                     >
-                      {t === 'MED' ? '药品' : t === 'SUPP' ? '补品' : t === 'WATER' ? '喝水' : '运动'}
+                      {t === 'MED' ? '药品' : t === 'SUPP' ? '补品' : t === 'WATER' ? '喝水' : '运动/学习'}
                     </button>
                   ))}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-1">{itemLabel}名称</label>
-                  <input type="text" placeholder={taskForm.type === 'WATER' ? '喝水' : taskForm.type === 'EXERCISE' ? '运动' : '例如: 阿司匹林'} className="w-full bg-gray-50 border-2 border-transparent rounded-2xl p-5 font-bold focus:border-primary focus:bg-white outline-none transition-all" value={taskForm.name} onChange={e => setTaskForm({...taskForm, name: e.target.value})} />
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">{itemLabel}名称</label>
+                    {taskForm.type === 'MED' && (
+                      <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button 
+                          onClick={() => setEntryMode('SELECT')}
+                          className={cn(
+                            "px-3 py-1 text-[8px] font-black uppercase rounded-md transition-all",
+                            entryMode === 'SELECT' ? "bg-white text-primary shadow-sm" : "text-gray-400"
+                          )}
+                        >
+                          快捷选择
+                        </button>
+                        <button 
+                          onClick={() => setEntryMode('MANUAL')}
+                          className={cn(
+                            "px-3 py-1 text-[8px] font-black uppercase rounded-md transition-all",
+                            entryMode === 'MANUAL' ? "bg-white text-primary shadow-sm" : "text-gray-400"
+                          )}
+                        >
+                          手动输入
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {entryMode === 'SELECT' && taskForm.type === 'MED' ? (
+                    <div className="space-y-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                      {!selectedCategory ? (
+                        <div className="grid grid-cols-1 gap-2">
+                          {COMMON_MEDS.map((cat, cIdx) => (
+                            <button
+                              key={cIdx}
+                              onClick={() => setSelectedCategory(cat.category)}
+                              className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl flex items-center justify-between hover:bg-white hover:border-primary/20 transition-all group"
+                            >
+                              <span className="text-xs font-black uppercase tracking-widest text-gray-600 group-hover:text-primary">{cat.category}</span>
+                              <ChevronRight size={14} className="text-gray-300 group-hover:text-primary" />
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <button 
+                            onClick={() => setSelectedCategory(null)}
+                            className="flex items-center gap-2 text-[10px] font-black uppercase text-primary/40 hover:text-primary transition-colors"
+                          >
+                            <ChevronLeft size={12} />
+                            返回病症列表
+                          </button>
+                          <div className="space-y-2">
+                            <p className="text-[8px] font-black text-primary/40 uppercase tracking-widest">{selectedCategory}</p>
+                            <div className="flex flex-wrap gap-2">
+                              {COMMON_MEDS.find(c => c.category === selectedCategory)?.items.map((item, iIdx) => (
+                                <button
+                                  key={iIdx}
+                                  onClick={() => setTaskForm({...taskForm, name: item})}
+                                  className={cn(
+                                    "px-4 py-2 rounded-xl text-xs font-bold border transition-all",
+                                    taskForm.name === item 
+                                      ? "bg-primary border-primary text-white shadow-md" 
+                                      : "bg-white border-gray-100 text-gray-600 hover:border-primary/30"
+                                  )}
+                                >
+                                  {item}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <input 
+                      type="text" 
+                      placeholder={taskForm.type === 'WATER' ? '喝水' : taskForm.type === 'EXERCISE' ? '运动/学习' : '例如: 阿司匹林'} 
+                      className="w-full bg-gray-50 border-2 border-transparent rounded-2xl p-5 font-bold focus:border-primary focus:bg-white outline-none transition-all" 
+                      value={taskForm.name} 
+                      onChange={e => setTaskForm({...taskForm, name: e.target.value})} 
+                    />
+                  )}
                 </div>
 
                 {taskForm.type !== 'WATER' && taskForm.type !== 'EXERCISE' && (
@@ -1231,7 +1340,7 @@ export default function App() {
                 </div>
 
                 <button onClick={saveTask} className="w-full bg-primary text-white font-black py-5 rounded-2xl shadow-2xl hover:bg-primary/90 active:scale-95 transition-all uppercase tracking-widest text-sm">
-                  {editingTask ? `更新${itemLabel}` : `保存${itemLabel}`}
+                  保存
                 </button>
               </div>
             </motion.div>
@@ -1258,7 +1367,7 @@ export default function App() {
               </div>
               
               <p className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-300 mb-2">
-                {activeReminder.type === 'MED' ? '药品提醒' : activeReminder.type === 'SUPP' ? '补品提醒' : activeReminder.type === 'WATER' ? '喝水提醒' : '运动提醒'}
+                {activeReminder.type === 'MED' ? '药品提醒' : activeReminder.type === 'SUPP' ? '补品提醒' : activeReminder.type === 'WATER' ? '喝水提醒' : '运动/学习提醒'}
               </p>
               <h2 className="text-4xl font-black mb-3 uppercase tracking-tighter">{activeReminder.name}</h2>
               <p className="text-gray-400 font-bold mb-10 uppercase tracking-tight">
