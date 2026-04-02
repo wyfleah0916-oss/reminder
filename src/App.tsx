@@ -33,7 +33,8 @@ import {
   Check,
   X,
   LayoutDashboard,
-  CalendarDays
+  CalendarDays,
+  Heart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -72,6 +73,7 @@ interface Task {
   type: TaskType;
   name: string;
   dosage: string;
+  category?: string; // For health tips
   frequency: number; // 1, 2, 3, 4
   reminders: {
     time: string;
@@ -116,18 +118,42 @@ const DEFAULT_MEAL_SETTINGS: MealSettings = {
 
 const COMMON_MEDS = [
   {
-    category: "高血压 (降压药)",
+    category: "高血压",
     items: ["托平胶囊", "厄贝沙坦片", "诺欣妥片", "雅施达片 (培哚普利)", "施慧达片", "安博诺片", "盐酸哌唑嗪片", "伲福达片", "复代文片", "拜新同片", "搏立高片", "亚尼安片", "苯磺酸左氨氯地平片", "合贝爽缓释胶囊 (盐酸地尔硫卓缓释胶囊)", "维拉帕米", "(美托洛尔) 倍他乐克缓释片", "倍他乐克片"]
   },
   {
-    category: "高血糖 (降糖药)",
+    category: "高血糖",
     items: ["达格列净片", "贝希胶囊", "二甲双胍片", "阿卡波糖片"]
   },
   {
-    category: "高血脂 (调脂/降脂药)",
+    category: "高血脂",
     items: ["美达信片", "普伐他汀片", "依折麦布片", "海舒严片", "瑞百安针", "立普 (阿托伐他汀)"]
   }
 ];
+
+const HEALTH_TIPS: Record<string, { icon: string, avoid: string[], suggest: string[], avoidTitle: string, suggestTitle: string }> = {
+  "高血压": {
+    icon: "🫀",
+    avoidTitle: "🚫 忌口重点（低盐最核心）",
+    avoid: ["咸菜、榨菜、泡菜", "腊肉、香肠、培根、火腿", "方便面、速食汤、罐头食品", "火锅底料、酱料（酱油、蚝油、豆瓣酱）", "外卖重口味菜（麻辣香锅、卤味）", "咸零食（薯片、坚果盐焗类）"],
+    suggestTitle: "✅ 建议多吃（高钾 + 清淡）",
+    suggest: ["🥬 绿叶菜（菠菜、油麦菜、生菜、芥蓝）", "🍅 蔬菜（番茄、黄瓜、西兰花、冬瓜）", "🍌 水果（香蕉、橙子、猕猴桃、火龙果）", "🥔 薯类（土豆、红薯、山药）", "🌾 粗粮（燕麦、糙米、玉米）", "🥣 清淡食物（蒸鱼、白灼菜、炖汤）"]
+  },
+  "高血糖": {
+    icon: "🍬",
+    avoidTitle: "🚫 忌口重点（控糖 + 控精制碳水）",
+    avoid: ["奶茶、含糖饮料、果汁", "蛋糕、面包、甜点、冰淇淋", "白米饭过量、白粥、糯米制品", "油条、炸糕等高GI主食", "高糖水果（榴莲、荔枝、龙眼、葡萄过量）", "甜味零食（饼干、糖果）"],
+    suggestTitle: "✅ 建议多吃（低GI + 高纤维）",
+    suggest: ["🌾 粗粮（燕麦、糙米、藜麦、全麦面包）", "🥦 蔬菜（西兰花、菠菜、苦瓜、芹菜）", "🥒 低糖蔬菜（黄瓜、西红柿、生菜）", "🍗 蛋白质（鸡蛋、鸡胸肉、鱼、豆腐）", "🥜 坚果（杏仁、核桃，少量）", "🍎 低糖水果（苹果、梨、蓝莓、草莓）"]
+  },
+  "高血脂": {
+    icon: "🧈",
+    avoidTitle: "🚫 忌口重点（减少坏脂肪）",
+    avoid: ["油炸食品（炸鸡、薯条、油条）", "肥肉、五花肉、猪油", "动物内脏（肝、肠、脑）", "奶油、黄油、芝士（过量）", "蛋糕、饼干（含反式脂肪）", "加工肉制品（香肠、培根）"],
+    suggestTitle: "✅ 建议多吃（好脂肪 + 降脂食物）",
+    suggest: ["🐟 深海鱼（三文鱼、沙丁鱼、金枪鱼）", "🫒 植物油（橄榄油、亚麻籽油）", "🥜 坚果（核桃、杏仁、腰果，少量）", "🥦 蔬菜（西兰花、胡萝卜、茄子）", "🌾 粗粮（燕麦、全麦）", "🍎 水果（苹果、柑橘类）", "🫘 豆类（黄豆、黑豆、豆腐）"]
+  }
+};
 
 export default function App() {
   // --- State ---
@@ -146,7 +172,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [view, setView] = useState<'dashboard' | 'tasks' | 'history' | 'settings'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'tasks' | 'history' | 'health'>('dashboard');
   const [isAdding, setIsAdding] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -352,6 +378,7 @@ export default function App() {
         type: taskForm.type || 'MED',
         name: finalName,
         dosage: finalDosage,
+        category: taskForm.category, // Save category for health tips
         frequency: taskForm.frequency || 1,
         reminders: finalReminders,
         isActive: true,
@@ -611,10 +638,13 @@ export default function App() {
           </div>
           <div className="flex gap-3">
             <button 
-              onClick={() => setView('settings')}
-              className="w-12 h-12 bg-gray-50 text-gray-400 rounded-2xl flex items-center justify-center hover:bg-primary hover:text-white transition-all"
+              onClick={() => setView('health')}
+              className={cn(
+                "w-12 h-12 rounded-2xl flex items-center justify-center transition-all",
+                view === 'health' ? "bg-primary text-white shadow-xl" : "bg-gray-50 text-gray-400 hover:bg-primary/10 hover:text-primary"
+              )}
             >
-              <Settings size={20} />
+              <Heart size={20} />
             </button>
             <button 
               onClick={() => { 
@@ -869,49 +899,65 @@ export default function App() {
           </div>
         )}
 
-        {/* View: Settings (Meal Times) */}
-        {view === 'settings' && (
+        {/* View: Health Management (Tips & Meal Times) */}
+        {view === 'health' && (
           <div className="space-y-8">
-            <h2 className="text-2xl font-black uppercase tracking-tighter">饭点设置</h2>
-            <div className="bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 space-y-8">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">早餐时间</label>
-                <input 
-                  type="time" 
-                  className="w-full bg-gray-50 border-2 border-transparent rounded-2xl p-5 font-bold focus:border-primary outline-none transition-all"
-                  value={mealSettings.breakfast}
-                  onChange={e => setMealSettings({...mealSettings, breakfast: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">午餐时间</label>
-                <input 
-                  type="time" 
-                  className="w-full bg-gray-50 border-2 border-transparent rounded-2xl p-5 font-bold focus:border-primary outline-none transition-all"
-                  value={mealSettings.lunch}
-                  onChange={e => setMealSettings({...mealSettings, lunch: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">晚餐时间</label>
-                <input 
-                  type="time" 
-                  className="w-full bg-gray-50 border-2 border-transparent rounded-2xl p-5 font-bold focus:border-primary outline-none transition-all"
-                  value={mealSettings.dinner}
-                  onChange={e => setMealSettings({...mealSettings, dinner: e.target.value})}
-                />
-              </div>
-              <p className="text-[10px] font-bold text-gray-300 uppercase text-center">
-                饭前提醒将提前 30 分钟，饭后延后 30 分钟
-              </p>
-              <div className="pt-8 border-t border-gray-50">
-                <button 
-                  onClick={() => setShowClearConfirm(true)}
-                  className="w-full bg-red-50 text-red-500 font-black py-5 rounded-2xl hover:bg-red-500 hover:text-white transition-all uppercase tracking-widest text-xs"
-                >
-                  清空所有数据
-                </button>
-              </div>
+            <h2 className="text-2xl font-black uppercase tracking-tighter">健康管理</h2>
+            
+            {/* Health Tips Section */}
+            <div className="space-y-4">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-1">健康建议</h3>
+              {(() => {
+                const activeCategories = Array.from(new Set(tasks.filter(t => t.type === 'MED' && t.category).map(t => t.category!))) as string[];
+                if (activeCategories.length === 0) {
+                  return (
+                    <div className="bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 text-center">
+                      <p className="text-gray-400 text-xs font-bold uppercase">暂无健康建议，请先添加药品</p>
+                    </div>
+                  );
+                }
+                return activeCategories.map(cat => {
+                  const tips = HEALTH_TIPS[cat];
+                  if (!tips) return null;
+                  return (
+                    <div key={cat} className="bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 space-y-6">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{tips.icon}</span>
+                        <h4 className="text-lg font-black uppercase tracking-tight">{cat}</h4>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-black text-red-500 uppercase tracking-wider">{tips.avoidTitle}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {tips.avoid.map((item, idx) => (
+                              <span key={idx} className="px-3 py-1 bg-red-50 text-red-600 text-[10px] font-bold rounded-lg">{item}</span>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-black text-green-500 uppercase tracking-wider">{tips.suggestTitle}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {tips.suggest.map((item, idx) => (
+                              <span key={idx} className="px-3 py-1 bg-green-50 text-green-600 text-[10px] font-bold rounded-lg">{item}</span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            <div className="pt-8 border-t border-gray-100">
+              <button 
+                onClick={() => setShowClearConfirm(true)}
+                className="w-full bg-red-50 text-red-500 font-black py-5 rounded-2xl hover:bg-red-500 hover:text-white transition-all uppercase tracking-widest text-xs"
+              >
+                清空所有记录
+              </button>
             </div>
           </div>
         )}
@@ -929,8 +975,8 @@ export default function App() {
           <button onClick={() => setView('history')} className={cn("p-3 rounded-2xl transition-all", view === 'history' ? "bg-primary text-white shadow-xl" : "text-gray-300")}>
             <CalendarDays size={24} />
           </button>
-          <button onClick={() => setView('settings')} className={cn("p-3 rounded-2xl transition-all", view === 'settings' ? "bg-primary text-white shadow-xl" : "text-gray-300")}>
-            <Settings size={24} />
+          <button onClick={() => setView('health')} className={cn("p-3 rounded-2xl transition-all", view === 'health' ? "bg-primary text-white shadow-xl" : "text-gray-300")}>
+            <Heart size={24} />
           </button>
         </div>
       </nav>
@@ -1068,7 +1114,7 @@ export default function App() {
                               {COMMON_MEDS.find(c => c.category === selectedCategory)?.items.map((item, iIdx) => (
                                 <button
                                   key={iIdx}
-                                  onClick={() => setTaskForm({...taskForm, name: item})}
+                                  onClick={() => setTaskForm({...taskForm, name: item, category: selectedCategory || undefined})}
                                   className={cn(
                                     "px-4 py-2 rounded-xl text-xs font-bold border transition-all",
                                     taskForm.name === item 
